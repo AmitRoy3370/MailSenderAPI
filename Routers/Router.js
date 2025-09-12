@@ -1,6 +1,6 @@
 const express = require('express');
-const userCollector = require('../Controllers/userCollectorController');
-const mailSender = require('../Controllers/mailSenderController');
+const userCollector = require('../Controllers/UserCollectorController');
+const mailSender = require('../Controllers/MailSenderController');
 const serverAwake = require('../Controllers/serverAwakeFile');
 
 const router = express.Router();
