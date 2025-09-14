@@ -103,6 +103,8 @@ async function sendMail(email, res) {
 
 async function pushCSVToGitHub() {
     try {
+        await git.addConfig('user.name', 'AmitRoy3370');
+        await git.addConfig('user.email', 'arponamitroy012@gmail.com');
         await git.add('./users.csv');
         await git.commit('Update users.csv after email batch');
 
