@@ -3,6 +3,11 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const csv = require("csv-parser");
+const simpleGit = require('simple-git');
+const git = simpleGit();
+
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN; // store token in Render’s environment variable
+const REPO_URL = 'https://github.com/AmitRoy3370/MailSenderAPI.git';
 
 exports.mailSender = async (req, res) => {
 
@@ -49,6 +54,8 @@ exports.mailSender = async (req, res) => {
                 "utf8"
             );
 
+            await pushCSVToGitHub();
+
             res.status(200).send(`Total ${mailSend.length} email send successfully\n These are :- `, mailSend.toString());
 
         });
@@ -91,5 +98,20 @@ async function sendMail(email, res) {
     } catch (err) {
         console.error(`❌ Failed to send to ${email}:`, err.message);
         //res.status(500).send(err.message);
+    }
+}
+
+async function pushCSVToGitHub() {
+    try {
+        await git.add('./users.csv');
+        await git.commit('Update users.csv after email batch');
+
+        await git.push([
+            `https://${GITHUB_TOKEN}@github.com/AmitRoy3370/MailSenderAPI.git`,
+            'HEAD:main'
+        ]);
+        console.log('✅ users.csv pushed to GitHub');
+    } catch (err) {
+        console.error('❌ Failed to push CSV to GitHub:', err.message);
     }
 }
