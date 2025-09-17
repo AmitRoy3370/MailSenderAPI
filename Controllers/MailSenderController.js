@@ -48,6 +48,11 @@ exports.mailSender = async (req, res) => {
 
             }
 
+            if (fs.existsSync(EMAIL_CSV_PATH)) {
+                fs.unlinkSync(EMAIL_CSV_PATH);
+                console.log("🗑️ Deleted old users.csv");
+            }
+
             fs.writeFileSync(
                 EMAIL_CSV_PATH,
                 restOfTheMail.join("\n"),
