@@ -9,7 +9,7 @@ const mongoose = require('mongoose');
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN; // store token in Render’s environment variable
 const REPO_URL = 'https://github.com/AmitRoy3370/MailSenderAPI.git';
-const MONGODB_URI = process.env.MONGODB_URI;
+const MONGODB_URI = "mongodb+srv://arponamitroy012_db_user:xOH41rRVcEsPzzEj@cluster0.cineyy3.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0";
 
 if (!MONGODB_URI) {
     console.error('MONGODB_URI is not set. Aborting.');
