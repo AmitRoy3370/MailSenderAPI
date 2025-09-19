@@ -5,17 +5,44 @@ const axios = require('axios');
 const csv = require("csv-parser");
 const simpleGit = require('simple-git');
 const git = simpleGit();
+const mongoose = require('mongoose');
 
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN; // store token in Render’s environment variable
 const REPO_URL = 'https://github.com/AmitRoy3370/MailSenderAPI.git';
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+    console.error('MONGODB_URI is not set. Aborting.');
+    process.exit(1);
+}
+
+const SubscriberSchema = new mongoose.Schema({
+    email: { type: String, required: true, unique: true, index: true },
+    addedAt: { type: Date, default: Date.now }
+}, { versionKey: false });
+
+const Subscriber = mongoose.model('Subscriber', SubscriberSchema);
+
+async function connectDB() {
+    if (mongoose.connection.readyState === 1) return;
+    await mongoose.connect(MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true
+    });
+
+    await Subscriber.init();
+    console.log('✅ Connected to MongoDB');
+}
 
 exports.mailSender = async (req, res) => {
 
     //const emails = req.body.emails;
 
+    await connectDB();
+
     const EMAIL_CSV_PATH = 'users.csv';
 
-    const emails = [];
+    let emails = [];
     fs.createReadStream(EMAIL_CSV_PATH)
         .pipe(csv({ headers: false }))
         .on('data', (row) => {
@@ -26,7 +53,24 @@ exports.mailSender = async (req, res) => {
             console.log(`Found ${emails.length} emails. Sending...`);
             console.log(emails);
 
-            let index = 0;
+            if(Subscriber.countDocuments() === 0) {
+
+                emails = await importCSVToMongo('users.csv', emails);
+
+            } else {
+
+                emails = await Subscriber.find();
+
+            }
+
+            const processResult = await processBatchAndDelete(300);
+
+            res.status(200).json({
+                ok: true,
+                processed: processResult
+            });
+
+            /*let index = 0;
 
             let restOfTheMail = [];
             let mailSend = [];
@@ -57,11 +101,11 @@ exports.mailSender = async (req, res) => {
                 EMAIL_CSV_PATH,
                 restOfTheMail.join("\n"),
                 "utf8"
-            );
+            );*/
 
-            await pushCSVToGitHub();
+            //await pushCSVToGitHub();
 
-            res.status(200).send(`Total ${mailSend.length} email send successfully\n These are :- `, mailSend.toString());
+            //res.status(200).send(`Total ${mailSend.length} email send successfully\n These are :- `, mailSend.toString());
 
         });
 
@@ -121,4 +165,77 @@ async function pushCSVToGitHub() {
     } catch (err) {
         console.error('❌ Failed to push CSV to GitHub:', err.message);
     }
+}
+
+async function importCSVToMongo(csvPath = 'users.csv', emails) {
+
+    if (emails.length === 0) {
+        return { inserted: 0, total: 0 };
+    }
+
+
+    const ops = emails.map(email => ({
+        updateOne: {
+            filter: { email },
+            update: { $setOnInsert: { email, addedAt: new Date() } },
+            upsert: true
+        }
+    }));
+
+
+    try {
+        const result = await Subscriber.bulkWrite(ops, { ordered: false });
+
+        const upserted = result.upsertedCount || (result.nUpserted || 0);
+        console.log(`Imported from CSV: new ${upserted}, total read ${emails.length}`);
+        return { inserted: upserted, total: emails.length };
+    } catch (err) {
+
+        console.warn('bulkWrite failed, falling back to sequential upsert:', err.message);
+        let inserted = 0;
+        for (const email of emails) {
+            try {
+                const r = await Subscriber.updateOne(
+                    { email },
+                    { $setOnInsert: { email, addedAt: new Date() } },
+                    { upsert: true }
+                );
+
+                if (r.upsertedCount || r.upsertedId) inserted++;
+            } catch (e) {
+                // ignore duplicate key or others
+            }
+        }
+        return { inserted, total: emails.length };
+    }
+}
+
+async function processBatchAndDelete(batchSize = 300) {
+
+    const docs = await Subscriber.find().sort({ addedAt: 1 }).limit(batchSize).lean();
+    if (!docs || docs.length === 0) {
+        return { sent: 0, failed: 0, failures: [] };
+    }
+
+    let sent = 0;
+    let failed = 0;
+    const failures = [];
+
+    for (const doc of docs) {
+        const email = doc.email;
+        try {
+            await sendMail(email);
+
+            await Subscriber.deleteOne({ _id: doc._id });
+            sent++;
+            console.log(`✅ Sent and deleted: ${email}`);
+        } catch (err) {
+            failed++;
+            failures.push({ email, error: err.message });
+            console.error(`❌ Failed to send ${email}:`, err.message);
+
+        }
+    }
+
+    return { sent, failed, failures };
 }
