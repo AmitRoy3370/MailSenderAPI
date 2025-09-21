@@ -53,13 +53,13 @@ exports.mailSender = async (req, res) => {
             console.log(`Found ${emails.length} emails. Sending...`);
             console.log(emails);
 
-            if(Subscriber.countDocuments() === 0) {
+            if(Subscriber.find({}).length === 0) {
 
                 emails = await importCSVToMongo('users.csv', emails);
 
             } else {
 
-                emails = await Subscriber.find();
+                emails = await Subscriber.find({});
 
             }
 
